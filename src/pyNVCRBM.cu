@@ -39,7 +39,7 @@ run(PyObject *self, PyObject *args){
     crbm = new CRBM(filter_num, filter_size,
               input_num, input_size, input_group_num,
               left_upper_padding, right_low_padding,
-              pooling_rate, NULL, //&filter,
+              pooling_rate, &filter,
               NULL, NULL, &input_data);
 
     struct timeval _start_time, _end_time;

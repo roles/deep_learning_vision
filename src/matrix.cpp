@@ -8,11 +8,12 @@ using namespace std;
 Matrix::Matrix(PyArrayObject *pyarr){
     this->nrow = PyArray_DIM(pyarr, 0);
     this->ncol = PyArray_DIM(pyarr, 1);
+    /*
     if(pyarr->flags & NPY_ARRAY_C_CONTIGUOUS){
         this->data = reinterpret_cast<float*>(pyarr->data);
         this->own = false;
-    }else{
-    
+    }else{*/
+  
         this->data = new float[this->nrow * this->ncol];
         for(int i = 0; i < this->nrow; i++){
             for(int j = 0; j < this->ncol; j++){
@@ -20,7 +21,7 @@ Matrix::Matrix(PyArrayObject *pyarr){
             }
         }
         this->own = true;
-    }
+    //}
     this->trans = false;
 }
 
@@ -32,7 +33,8 @@ Matrix::Matrix(int nrow, int ncol, float low, float upper){
     this->data  = new float[nrow * ncol];
     for(int i = 0; i < nrow; i++){
         for(int j = 0; j < ncol; j++){
-            (*this)(i, j) = random_float(low, upper);
+            //(*this)(i, j) = random_float(low, upper);
+	    (*this)(i, j) = i * ncol + j;
         }
     }
 }

@@ -66,7 +66,7 @@ Matrix* CRBM::filter_init(int filter_size, int filter_num, int channel_num){
     float low   = - 4 * sqrt(6.0 / (2 * filter_size * filter_size * channel_num)); 
     float upper = -low;
     return new Matrix(filter_num, filter_size*filter_size, low, upper);
-    //return new Matrix(filter_num, channel_num*filter_size*filter_size, 1, 1);
+    //return new Matrix(filter_num, channel_num*filter_size*filter_size, 1.5, 1.5);
 }
 
 void CRBM::CPU_convolution_forward(){
@@ -151,6 +151,7 @@ __global__ void convolution_forward_kernel(float *input,
                 + g * filter_size * filter_size +
                 threadIdx.y * filter_size + threadIdx.x];
         }
+        __syncthreads();
 
         float *img = input + imgIdx * input_size * input_size * channel_num
             + g * input_size * input_size;
@@ -202,6 +203,8 @@ __global__ void convolution_forward_kernel(float *input,
             }
             imgPtr += 32 + MAX_FILETER_SIZE - 1;
         }
+
+        __syncthreads();
 
     }
 
