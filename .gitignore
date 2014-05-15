@@ -1,2 +1,5 @@
 *.so
 *.o
+*.png
+*.tif
+*.pkl
