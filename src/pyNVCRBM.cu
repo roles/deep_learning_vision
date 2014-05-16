@@ -39,23 +39,25 @@ run(PyObject *self, PyObject *args){
     crbm = new CRBM(filter_num, filter_size,
               input_num, input_size, input_group_num,
               left_upper_padding, right_low_padding,
-              pooling_rate, &filter,
+              pooling_rate, NULL, //&filter,
               NULL, NULL, &input_data);
 
     struct timeval _start_time, _end_time;
 
     //crbm->CPU_convolution_forward();
     timeFunc(crbm->CPU_convolution_forward(), "CPU convolutional forward");
-    cout << "CPU" << (*crbm->CPU_y_h)(0, 1728) << endl;
+    
+    timeFunc(crbm->CPU_max_pooling(), "CPU max pooling");
 
     timeFunc(crbm->GPU_convolution_forward(), "GPU convolutional forward");
 
-    Matrix* tmp_y_h = new Matrix(crbm->CPU_y_h->get_row_num(),
+    timeFunc(crbm->GPU_max_pooling(), "GPU max pooling");
+
+    Matrix* tmp_y_h_probs = new Matrix(crbm->CPU_y_h->get_row_num(),
                                  crbm->CPU_y_h->get_col_num());
-    crbm->GPU_y_h->assign(*tmp_y_h);
-    cout << "GPU" << (*tmp_y_h)(0, 1728) << endl;
-    crbm->CPU_y_h->equal_value(*tmp_y_h);
-    delete tmp_y_h;
+    crbm->GPU_y_h_probs->assign(*tmp_y_h_probs);
+    crbm->CPU_y_h_probs->equal_value(*tmp_y_h_probs);
+    delete tmp_y_h_probs;
 
     return Py_BuildValue("i", 0);
 }

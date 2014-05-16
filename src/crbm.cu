@@ -1,6 +1,7 @@
 #include "matrix.h"
 #include "crbm.cuh"
 #include <iostream>
+#include "utils.h"
 
 using namespace std;
 
@@ -20,6 +21,7 @@ CRBM::CRBM(int filter_num, int filter_size,
     this->right_low_padding = right_low_padding;
     this->feature_map_size = input_size + left_upper_padding +
         right_low_padding - filter_size + 1;
+    this->subsample_size = feature_map_size / pooling_rate;
 
     if(filters == NULL){
         this->CPU_filters = filter_init(filter_size, filter_num, channel_num); 
@@ -41,13 +43,19 @@ CRBM::CRBM(int filter_num, int filter_size,
     this->CPU_input = input;
     this->CPU_y_h = new Matrix(input_num ,
             filter_num * feature_map_size * feature_map_size);
+    this->CPU_y_h_probs = new Matrix(input_num ,
+            filter_num * feature_map_size * feature_map_size);
+    this->CPU_y_p = new Matrix(input_num, 
+            filter_num * feature_map_size * feature_map_size / 
+            (pooling_rate * pooling_rate));
 
     this->GPU_filters = new NVMatrix(*this->CPU_filters);
     this->GPU_hbias = new NVMatrix(*this->CPU_hbias);
     this->GPU_vbias = new NVMatrix(*this->CPU_vbias);
     this->GPU_input = new NVMatrix(*this->CPU_input);
     this->GPU_y_h = new NVMatrix(*this->CPU_y_h);
-
+    this->GPU_y_h_probs = new NVMatrix(*this->CPU_y_h);
+    this->GPU_y_p = new NVMatrix(*this->CPU_y_p);
 }
 
 CRBM::~CRBM(){
@@ -55,17 +63,21 @@ CRBM::~CRBM(){
     delete this->CPU_hbias;
     delete this->CPU_vbias;
     delete this->CPU_y_h;
+    delete this->CPU_y_h_probs;
+    delete this->CPU_y_p;
 
     delete this->GPU_filters;
     delete this->GPU_hbias;
     delete this->GPU_vbias;
     delete this->GPU_y_h;
+    delete this->GPU_y_h_probs;
+    delete this->GPU_y_p;
 }
 
 Matrix* CRBM::filter_init(int filter_size, int filter_num, int channel_num){
     float low   = - 4 * sqrt(6.0 / (2 * filter_size * filter_size * channel_num)); 
     float upper = -low;
-    return new Matrix(filter_num, filter_size*filter_size, low, upper);
+    return new Matrix(filter_num, channel_num*filter_size*filter_size, low, upper);
     //return new Matrix(filter_num, channel_num*filter_size*filter_size, 1.5, 1.5);
 }
 
@@ -119,8 +131,67 @@ void CRBM::CPU_convolution_forward(){
                     *curTarget += *curBias;
                 }
             }
+        }
+    }
+}
 
-            //cout << "filter " << fil << endl;
+static int max_pooling_multinomial(float *probs, int len){
+    float rnd = random_float(0, 1);
+    int i;
+
+    for(i = 0; rnd > probs[i]; i++, probs[i] += probs[i-1]);
+
+    return i;
+}
+
+void CRBM::CPU_max_pooling(){
+    float pooling_area[MAX_POOLING_RATE*MAX_FILETER_SIZE+1];
+
+    for(int img = 0; img < input_num; img++){
+        for(int fil = 0; fil < filter_num; fil++){
+            float *fm = CPU_y_h->get_data() + 
+                img * filter_num * feature_map_size * feature_map_size +
+                fil * feature_map_size * feature_map_size;
+            float *probs = CPU_y_h_probs->get_data() + 
+                img * filter_num * feature_map_size * feature_map_size +
+                fil * feature_map_size * feature_map_size;
+            float *target = CPU_y_p->get_data() +
+                img * filter_num * subsample_size * subsample_size +
+                fil * subsample_size * subsample_size;
+
+            for(int i = 0; i < feature_map_size; i += pooling_rate){
+                for(int j = 0; j < feature_map_size; j += pooling_rate){
+                    
+                    float sum = 0;
+                    for(int pi = 0; pi < pooling_rate; pi++){
+                        for(int pj = 0; pj < pooling_rate; pj++){
+                            float *cur_fm = fm + (i+pi) * feature_map_size + (j+pj);
+                            *cur_fm = expf(*cur_fm);
+                            sum += *cur_fm;
+                        }
+                    }
+                    for(int pi = 0; pi < pooling_rate; pi++){
+                        for(int pj = 0; pj < pooling_rate; pj++){
+                            float *cur_fm = fm + (i+pi) * feature_map_size + (j+pj);
+                            float *cur_probs = probs + (i+pi) * feature_map_size + (j+pj);
+                            *cur_probs = *cur_fm / (1 +sum);
+                            pooling_area[pi*pooling_rate+pj] = *cur_probs;
+                            *cur_fm = 0;
+                        }
+                    }
+                    pooling_area[pooling_rate*pooling_rate] = 1.0/(1+sum);
+                    int pooling_idx = max_pooling_multinomial(pooling_area, 
+                            pooling_rate*pooling_rate+1);
+                    if(pooling_idx == pooling_rate*pooling_rate){
+                        target[i*subsample_size+j] = 1;
+                    }else{
+                        target[i*subsample_size+j] = 0;
+                        int pi = pooling_idx / pooling_rate;
+                        int pj = pooling_idx % pooling_rate;
+                        fm[(i+pi) * feature_map_size + (j+pj)] = 1;
+                    }
+                }
+            }
         }
     }
 }
@@ -212,10 +283,57 @@ __global__ void convolution_forward_kernel(float *input,
 
 }
 
+__global__ void max_pooling_kernel(float *feature_map, float *probs, float *target,
+        int feature_map_size, int feature_map_num, int pooling_rate){
+    __shared__ float shFm[16*MAX_POOLING_RATE][16*MAX_POOLING_RATE];
+
+    int imgIdx = blockIdx.y / (feature_map_size / 16 / pooling_rate);
+    int fmIdx = blockIdx.x / (feature_map_size / 16 / pooling_rate);
+    int tx = (blockIdx.x % (feature_map_size / pooling_rate / 16)) * 16 + threadIdx.x;
+    int ty = (blockIdx.y % (feature_map_size / pooling_rate / 16)) * 16 + threadIdx.y;
+
+    float *fm = feature_map + imgIdx * feature_map_num * feature_map_size * feature_map_size +
+        fmIdx * feature_map_size * feature_map_size + ty * feature_map_size * pooling_rate + tx;
+
+    probs = probs + imgIdx * feature_map_num * feature_map_size * feature_map_size +
+        fmIdx * feature_map_size * feature_map_size + ty * feature_map_size * pooling_rate + tx;
+
+    for(int i = 0; i < pooling_rate; i++){
+        for(int j = 0; j < pooling_rate; j++){
+            shFm[threadIdx.y+i][threadIdx.x+j] = 
+                fm[(ty+i) * feature_map_size + (tx+j)];
+        }
+    }
+
+    __syncthreads();
+
+    float sum = 0;
+    for(int i = 0; i < pooling_rate; i++){
+        for(int j = 0; j < pooling_rate; j++){
+            sum += (shFm[threadIdx.y+i][threadIdx.x+j] = 
+                    __expf(shFm[threadIdx.y+i][threadIdx.x+j]));
+        }
+    }
+    for(int i = 0; i < pooling_rate; i++){
+        for(int j = 0; j < pooling_rate; j++){
+            shFm[threadIdx.y+i][threadIdx.x+j] /= (1 + sum);
+            probs[(ty+i) * feature_map_size + (tx+j)] = shFm[threadIdx.y+i][threadIdx.x+i];
+        }
+    }
+}
+
 void CRBM::GPU_convolution_forward(){
     dim3 blocks = dim3(input_size / 32 * filter_num, input_size / 32 * input_num);
     dim3 threads = dim3(32, 32);
     convolution_forward_kernel<<<blocks, threads>>>(GPU_input->get_data(),
         GPU_filters->get_data(), GPU_y_h->get_data(), GPU_hbias->get_data(), input_size,
         channel_num, feature_map_size, filter_size, filter_num, left_upper_padding);
+}
+
+void CRBM::GPU_max_pooling(){
+    dim3 blocks = dim3(feature_map_size / pooling_rate / 16 * filter_num, 
+            feature_map_size / pooling_rate / 16 * input_num);
+    dim3 threads = dim3(16, 16);
+    max_pooling_kernel<<<blocks, threads>>>(GPU_y_h->get_data(), GPU_y_h_probs->get_data(),
+            GPU_y_p->get_data(), feature_map_size, filter_num, pooling_rate);
 }

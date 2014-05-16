@@ -19,8 +19,11 @@ nvcrbm.so : $(OBJS)
 %.o: %.cu
 	$(NVCC) -c $(NVCCFLAGS) $< -o $@
 
-install:
+install64:
 	cp nvcrbm.so /usr/lib/python2.7/dist-packages/nvcrbm.so
+
+install:
+	cp nvcrbm.so /usr/local/lib/python2.7/dist-packages/nvcrbm.so
 
 clean:
 	rm -rf *.so *.o

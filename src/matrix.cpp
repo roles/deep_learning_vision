@@ -33,8 +33,7 @@ Matrix::Matrix(int nrow, int ncol, float low, float upper){
     this->data  = new float[nrow * ncol];
     for(int i = 0; i < nrow; i++){
         for(int j = 0; j < ncol; j++){
-            //(*this)(i, j) = random_float(low, upper);
-	    (*this)(i, j) = i * ncol + j;
+            (*this)(i, j) = random_float(low, upper);
         }
     }
 }
