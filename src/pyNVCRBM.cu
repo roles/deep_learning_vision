@@ -43,7 +43,6 @@ run(PyObject *self, PyObject *args){
               NULL, NULL, &input_data);
 
     struct timeval _start_time, _end_time;
-
     //crbm->CPU_convolution_forward();
     timeFunc(crbm->CPU_convolution_forward(), "CPU convolutional forward");
     

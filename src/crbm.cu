@@ -46,8 +46,7 @@ CRBM::CRBM(int filter_num, int filter_size,
     this->CPU_y_h_probs = new Matrix(input_num ,
             filter_num * feature_map_size * feature_map_size);
     this->CPU_y_p = new Matrix(input_num, 
-            filter_num * feature_map_size * feature_map_size / 
-            (pooling_rate * pooling_rate));
+            filter_num * subsample_size * subsample_size);
 
     this->GPU_filters = new NVMatrix(*this->CPU_filters);
     this->GPU_hbias = new NVMatrix(*this->CPU_hbias);
@@ -183,9 +182,9 @@ void CRBM::CPU_max_pooling(){
                     int pooling_idx = max_pooling_multinomial(pooling_area, 
                             pooling_rate*pooling_rate+1);
                     if(pooling_idx == pooling_rate*pooling_rate){
-                        target[i*subsample_size+j] = 1;
+                        target[(i/pooling_rate)*subsample_size+(j/pooling_rate)] = 1;
                     }else{
-                        target[i*subsample_size+j] = 0;
+                        target[(i/pooling_rate)*subsample_size+(j/pooling_rate)] = 0;
                         int pi = pooling_idx / pooling_rate;
                         int pj = pooling_idx % pooling_rate;
                         fm[(i+pi) * feature_map_size + (j+pj)] = 1;
