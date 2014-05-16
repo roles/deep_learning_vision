@@ -56,8 +56,8 @@ CRBM::CRBM(int filter_num, int filter_size,
     this->GPU_y_h = new NVMatrix(*this->CPU_y_h);
     this->GPU_y_h_probs = new NVMatrix(*this->CPU_y_h);
     this->GPU_y_p = new NVMatrix(*this->CPU_y_p);
-    this->rnd_state_num = 1000;
-    setup_curand(this->rnd_state, this->rnd_state_num);
+    this->rnd_state_num = 1;
+    setup_curand(&this->rnd_state, this->rnd_state_num);
 }
 
 CRBM::~CRBM(){
@@ -298,6 +298,8 @@ __global__ void max_pooling_kernel(float *feature_map, float *probs, float *targ
     int ty = (blockIdx.y % (feature_map_size / pooling_rate / 16)) * 16 + threadIdx.y;
     int subsample_size = feature_map_size / pooling_rate;
 
+    float rnd = curand_uniform(rnd_state);
+
     float *fm = feature_map + imgIdx * feature_map_num * feature_map_size * feature_map_size +
         fmIdx * feature_map_size * feature_map_size;
 
@@ -334,8 +336,6 @@ __global__ void max_pooling_kernel(float *feature_map, float *probs, float *targ
     }
 
     sum = 0;
-    //float rnd = curand_uniform(rnd_state);
-    float rnd = 0.3;
     bool isStop = false;
     for(int i = 0; i < pooling_rate && !isStop; i++){
         for(int j = 0; j < pooling_rate && !isStop; j++){
