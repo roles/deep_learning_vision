@@ -301,7 +301,7 @@ __global__ void max_pooling_kernel(float *feature_map, float *probs, float *targ
     for(int i = 0; i < pooling_rate; i++){
         for(int j = 0; j < pooling_rate; j++){
             shFm[threadIdx.y*pooling_rate+i][threadIdx.x*pooling_rate+j] = 
-                fm[(ty+i) * feature_map_size + (tx+j)];
+                fm[(ty*pooling_rate+i) * feature_map_size + (tx*pooling_rate+j)];
         }
     }
 
@@ -318,7 +318,7 @@ __global__ void max_pooling_kernel(float *feature_map, float *probs, float *targ
     for(int i = 0; i < pooling_rate; i++){
         for(int j = 0; j < pooling_rate; j++){
             shFm[threadIdx.y*pooling_rate+i][threadIdx.x*pooling_rate+j] /= (1 + sum);
-            probs[(ty+i) * feature_map_size + (tx+j)] = 
+            probs[(ty*pooling_rate+i) * feature_map_size + (tx*pooling_rate+j)] = 
                 shFm[threadIdx.y*pooling_rate+i][threadIdx.x*pooling_rate+j];
         }
     }

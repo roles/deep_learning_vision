@@ -26,7 +26,7 @@ inline float random_float(float low, float upper){
 }
 
 inline bool float_equal(float a, float b){
-    float e = 1e-1;
+    float e = 1e-3;
     float diff = a - b;
     return (diff < e) && (-diff < e);
 }
