@@ -3,6 +3,8 @@
 
 #include "matrix.h"
 #include "nvmatrix.cuh"
+#include <curand_kernel.h>
+#include <cuda.h>
 
 #define MAX_FILETER_SIZE 8
 #define MAX_POOLING_RATE 3
@@ -34,6 +36,8 @@ class CRBM {
         NVMatrix *GPU_vbias, *GPU_hbias;
         NVMatrix *GPU_y_h, *GPU_y_h_probs;
         NVMatrix *GPU_y_p;
+        curandState *rnd_state;
+        int rnd_state_num;
 
         void GPU_convolution_forward();
         void GPU_max_pooling();
