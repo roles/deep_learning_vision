@@ -48,6 +48,8 @@ CRBM::CRBM(int filter_num, int filter_size,
             filter_num * feature_map_size * feature_map_size);
     this->CPU_y_p = new Matrix(input_num, 
             filter_num * subsample_size * subsample_size);
+    this->CPU_y_v_probs = new Matrix(this->CPU_input->get_row_num(),
+            this->CPU_input->get_col_num());
 
     this->GPU_filters = new NVMatrix(*this->CPU_filters);
     this->GPU_hbias = new NVMatrix(*this->CPU_hbias);
@@ -56,6 +58,7 @@ CRBM::CRBM(int filter_num, int filter_size,
     this->GPU_y_h = new NVMatrix(*this->CPU_y_h);
     this->GPU_y_h_probs = new NVMatrix(*this->CPU_y_h);
     this->GPU_y_p = new NVMatrix(*this->CPU_y_p);
+    this->GPU_y_v_probs = new NVMatrix(*this->CPU_y_v_probs);
     this->rnd_state_num = 1;
     setup_curand(&this->rnd_state, this->rnd_state_num);
 }
@@ -67,6 +70,7 @@ CRBM::~CRBM(){
     delete this->CPU_y_h;
     delete this->CPU_y_h_probs;
     delete this->CPU_y_p;
+    delete this->CPU_y_v_probs;
 
     delete this->GPU_filters;
     delete this->GPU_hbias;
@@ -74,6 +78,7 @@ CRBM::~CRBM(){
     delete this->GPU_y_h;
     delete this->GPU_y_h_probs;
     delete this->GPU_y_p;
+    delete this->GPU_y_v_probs;
 
     cudaFree(this->rnd_state);
 }
@@ -194,6 +199,56 @@ void CRBM::CPU_max_pooling(){
                         int pj = pooling_idx % pooling_rate;
                         fm[(i+pi) * feature_map_size + (j+pj)] = 1;
                     }
+                }
+            }
+        }
+    }
+}
+
+void CRBM::CPU_convolution_backward(){
+    float tmp_recon[MAX_IMGAG_SIZE][MAX_IMGAG_SIZE];
+    int padding = filter_size-1;
+    int input_padding_size = feature_map_size + filter_size - 1;
+    int lu_padding = left_upper_padding;
+
+    bzero(tmp_recon, sizeof(tmp_recon));
+
+    for(int img = 0; img < input_num; img++){
+        for(int cha = 0; cha < channel_num; cha++){
+            float *target = CPU_y_v_probs->get_data() +
+                img * channel_num * input_size * input_size +
+                cha * input_size * input_size;
+
+            for(int fil = 0; fil < filter_num; fil++){
+                float *filter = CPU_filters->get_data() +
+                    fil * filter_size * filter_size * channel_num +
+                    cha * filter_size * filter_size;
+
+                float *fm = CPU_y_h_probs->get_data() +
+                    img * filter_num * feature_map_size * feature_map_size +
+                    fil * feature_map_size * feature_map_size;
+
+                for(int r = 0; r < feature_map_size + filter_size - 1; r++){
+                    for(int c = 0; c < feature_map_size + filter_size - 1; c++){
+
+                        for(int i = r; i < r+filter_size; i++){
+                            for(int j = c; j < c+filter_size; j++){
+                                if(!(i < padding || j < padding ||
+                                     i >= (padding + feature_map_size) ||
+                                     j >= (padding + feature_map_size))){
+                                    tmp_recon[r][c] += 
+                                        fm[(i-padding)*feature_map_size + (j-padding)] *
+                                        filter[(filter_size-1-(i-r))*feature_map_size + (filter_size-1-(j-c))];
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+             
+            for(int i = 0; i < input_size; i++){
+                for(int j = 0; j < input_size; j++){
+                    target[i*input_size+j] = logisitc(tmp_recon[i+lu_padding][j+lu_padding]);
                 }
             }
         }
@@ -353,6 +408,90 @@ __global__ void max_pooling_kernel(float *feature_map, float *probs, float *targ
     }
 }
 
+__global__ void convolution_backward_kernel(float *y_h, float *filters, float *target,
+        int input_size, int lu_padding, int channel_num, int feature_map_size, 
+        int filter_num, int filter_size){
+    int imgIdx = blockIdx.y / (input_size / 32); 
+    int channelIdx = blockIdx.x / (input_size / 32);
+    int tx = (blockIdx.x % (input_size / 32)) * 32 + threadIdx.x;
+    int ty = (blockIdx.y % (input_size / 32)) * 32 + threadIdx.y;
+    int padding = (filter_size - 1);
+
+    __shared__ float shHidden[32+2*(MAX_FILETER_SIZE-1)][32+2*(MAX_FILETER_SIZE-1)];
+    __shared__ float shFlipFilter[MAX_FILETER_SIZE][MAX_FILETER_SIZE];
+
+    target = target + imgIdx * channel_num * input_size * input_size +
+        channelIdx * input_size * input_size;
+
+    __syncthreads();
+
+
+    for(int f = 0; f < filter_num; f++){
+        float *cur_y_h = y_h + imgIdx * filter_num * feature_map_size * feature_map_size +
+            f * feature_map_size * feature_map_size;
+
+        float *cur_filter = filters + f * channel_num * filter_size * filter_size +
+            channelIdx * filter_size * filter_size;
+        
+        if(threadIdx.x < filter_size && threadIdx.y < filter_size){
+            shFlipFilter[threadIdx.y][threadIdx.x] = 
+                cur_filter[(filter_size-1-threadIdx.y)*filter_size + filter_size-1-threadIdx.x];
+        }
+
+        float *shHiddenLoad = &shHidden[threadIdx.y][threadIdx.x];
+        if(tx < padding || ty < padding){
+            *shHiddenLoad = 0;
+        }else{
+            *shHiddenLoad = cur_y_h[(ty-padding) * input_size + 
+                (tx-padding)];
+        }
+
+        if(threadIdx.x < 2 * padding){
+            shHiddenLoad = &shHidden[threadIdx.y][threadIdx.x+32];
+            if(ty < padding || (tx+32) >= (feature_map_size+padding)){
+                *shHiddenLoad = 0; 
+            }else{
+                *shHiddenLoad = cur_y_h[(ty-padding) * feature_map_size + 
+                    (tx+32-padding)];
+            }
+        }
+
+        if(threadIdx.y < 2 * padding){
+            shHiddenLoad = &shHidden[threadIdx.y+32][threadIdx.x];
+            if(tx < padding || (ty+32) >= (feature_map_size+padding)){
+                *shHiddenLoad = 0; 
+            }else{
+                *shHiddenLoad = cur_y_h[(ty+32-padding) * feature_map_size + 
+                    (tx-padding)];
+            }
+
+            if(threadIdx.x < 2 * padding){
+                shHiddenLoad = &shHidden[threadIdx.y+32][threadIdx.x+32];
+                if((ty+32) >= (feature_map_size+padding) || 
+                   (tx+32) >= (feature_map_size+padding)){
+                    *shHiddenLoad = 0; 
+                }else{
+                    *shHiddenLoad = cur_y_h[(ty+32-padding) * feature_map_size + 
+                        (tx+32-padding)];
+                }
+            }
+        }
+
+        __syncthreads();
+
+        for(int i = 0; i < filter_size; i++){
+            for(int j = 0; j < filter_size; j++){
+                target[ty*input_size+tx] += 
+                    shHidden[threadIdx.y+i+lu_padding][threadIdx.x+j+lu_padding] *
+                    shFlipFilter[i][j];
+            }
+        }
+        target[ty*input_size+tx] = 1.0 / (1 + __expf(-target[ty*input_size+tx]));
+
+        __syncthreads();
+    }
+}
+
 void CRBM::GPU_convolution_forward(){
     dim3 blocks = dim3(input_size / 32 * filter_num, input_size / 32 * input_num);
     dim3 threads = dim3(32, 32);
@@ -368,4 +507,13 @@ void CRBM::GPU_max_pooling(){
     max_pooling_kernel<<<blocks, threads>>>(GPU_y_h->get_data(), GPU_y_h_probs->get_data(),
             GPU_y_p->get_data(), feature_map_size, filter_num, pooling_rate, rnd_state, 
             rnd_state_num);
+}
+
+void CRBM::GPU_convolution_backward(){
+    dim3 blocks = dim3(input_size / 32 * channel_num, input_size / 32 * input_num);
+    dim3 threads = dim3(32, 32);
+
+    convolution_backward_kernel<<<blocks, threads>>>(GPU_y_h_probs->get_data(),
+        GPU_filters->get_data(), GPU_y_v_probs->get_data(), input_size, left_upper_padding,
+        channel_num, feature_map_size, filter_num, filter_size);
 }

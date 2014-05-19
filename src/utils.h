@@ -4,7 +4,7 @@
 #include <cstdlib>
 #include <sys/time.h>
 #include <iostream>
-
+#include <cmath>
 
 #define timeFunc(func, message) \
     gettimeofday(&_start_time, NULL); \
@@ -29,6 +29,10 @@ inline bool float_equal(float a, float b){
     float e = 1e-3;
     float diff = a - b;
     return (diff < e) && (-diff < e);
+}
+
+inline float logisitc(float a){
+    return 1.0 / (1 + exp(-a));
 }
 
 #endif

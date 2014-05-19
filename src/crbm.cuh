@@ -8,6 +8,7 @@
 
 #define MAX_FILETER_SIZE 8
 #define MAX_POOLING_RATE 3
+#define MAX_IMGAG_SIZE 128
 #define RAND_SIZE 10000
 
 class CRBM {
@@ -25,22 +26,26 @@ class CRBM {
         Matrix *CPU_input;
         Matrix *CPU_filters;
         Matrix *CPU_vbias, *CPU_hbias;
-        Matrix* CPU_y_h, *CPU_y_h_probs;
-        Matrix* CPU_y_p;
+        Matrix *CPU_y_h, *CPU_y_h_probs;
+        Matrix *CPU_y_p;
+        Matrix *CPU_y_v_probs;
 
         void CPU_convolution_forward();
         void CPU_max_pooling();
+        void CPU_convolution_backward();
 
         NVMatrix *GPU_input;
         NVMatrix *GPU_filters;
         NVMatrix *GPU_vbias, *GPU_hbias;
         NVMatrix *GPU_y_h, *GPU_y_h_probs;
         NVMatrix *GPU_y_p;
+        NVMatrix *GPU_y_v_probs;
         curandState *rnd_state;
         int rnd_state_num;
 
         void GPU_convolution_forward();
         void GPU_max_pooling();
+        void GPU_convolution_backward();
 
         CRBM(int, int, int, int, int, int, int, int,
              Matrix*, Matrix*, Matrix*, Matrix*);
