@@ -44,23 +44,37 @@ run(PyObject *self, PyObject *args){
 
     struct timeval _start_time, _end_time;
     //crbm->CPU_convolution_forward();
-    timeFunc(crbm->CPU_convolution_forward(), "CPU convolutional forward");
+    timeFunc(crbm->CPU_convolution_forward(crbm->CPU_input->get_data(),
+            crbm->CPU_filters->get_data(), crbm->CPU_y_h->get_data(),
+            crbm->CPU_hbias->get_data()), "CPU convolutional forward");
     
-    timeFunc(crbm->CPU_max_pooling(), "CPU max pooling");
+    timeFunc(crbm->CPU_max_pooling(crbm->CPU_y_h->get_data(),
+            crbm->CPU_y_h_probs->get_data(), crbm->CPU_y_p->get_data()), 
+            "CPU max pooling");
 
-    timeFunc(crbm->CPU_convolution_backward(), "CPU convolutional backward");
+    timeFunc(crbm->CPU_convolution_backward(crbm->CPU_y_h_probs->get_data(),
+            crbm->CPU_filters->get_data(), crbm->CPU_vbias->get_data(),
+            crbm->CPU_y_v_probs->get_data(), crbm->CPU_y_v->get_data()), 
+            "CPU convolutional backward");
 
-    timeFunc(crbm->GPU_convolution_forward(), "GPU convolutional forward");
-
-    timeFunc(crbm->GPU_max_pooling(), "GPU max pooling");
+    timeFunc(crbm->GPU_convolution_forward(crbm->GPU_input->get_data(),
+            crbm->GPU_filters->get_data(), crbm->GPU_y_h->get_data(),
+            crbm->GPU_hbias->get_data()), "GPU convolutional forward");
     
-    timeFunc(crbm->GPU_convolution_backward(), "GPU convolutional backward");
+    timeFunc(crbm->GPU_max_pooling(crbm->GPU_y_h->get_data(),
+            crbm->GPU_y_h_probs->get_data(), crbm->GPU_y_p->get_data()), 
+            "GPU max pooling");
+    
+    timeFunc(crbm->GPU_convolution_backward(crbm->GPU_y_h_probs->get_data(),
+            crbm->GPU_filters->get_data(), crbm->GPU_vbias->get_data(),
+            crbm->GPU_y_v_probs->get_data(), crbm->GPU_y_v->get_data()), 
+            "GPU convolutional backward");
 
-    /*Matrix* tmp_y_h_probs = new Matrix(crbm->CPU_y_h_probs->get_row_num(),
+    Matrix* tmp_y_h_probs = new Matrix(crbm->CPU_y_h_probs->get_row_num(),
                                  crbm->CPU_y_h_probs->get_col_num());
     crbm->GPU_y_h_probs->assign(*tmp_y_h_probs);
     crbm->CPU_y_h_probs->equal_value(*tmp_y_h_probs);
-    delete tmp_y_h_probs;*/
+    delete tmp_y_h_probs;
 
     Matrix* tmp_y_v_probs = new Matrix(crbm->CPU_y_v_probs->get_row_num(),
                                  crbm->CPU_y_v_probs->get_col_num());
@@ -73,9 +87,6 @@ run(PyObject *self, PyObject *args){
 
 static PyObject*
 test(PyObject *self, PyObject *args){
-    crbm->CPU_convolution_forward();
-
-    delete crbm;
     return Py_BuildValue("i", 0);
 }
 

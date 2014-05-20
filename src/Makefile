@@ -8,7 +8,7 @@ NVCCFLAGS :=-G -g -w -Xcompiler -fPIC
 CPPFLAGS += $(INC_PATH)
 NVCCFLAGS += $(INC_PATH) 
 LDFLAGS=-fPIC -shared -L/usr/local/cuda/lib -L/usr/local/cuda/lib64
-OBJS=pyNVCRBM.o crbm.o matrix.o nvmatrix.o
+OBJS=pyNVCRBM.o crbm.o crbm_kernel.o matrix.o nvmatrix.o
 
 nvcrbm.so : $(OBJS)
 	$(CC) $(LDFLAGS) $^ -lcudart -o $@

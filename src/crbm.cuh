@@ -6,10 +6,9 @@
 #include <curand_kernel.h>
 #include <cuda.h>
 
-#define MAX_FILETER_SIZE 8
-#define MAX_POOLING_RATE 3
-#define MAX_IMGAG_SIZE 128
-#define RAND_SIZE 10000
+#define CUDA_CALL(x) do { if((x) != cudaSuccess) { \
+                         printf("Error at %s:%d\n", __FILE__, __LINE__); \
+                         exit(1); }} while(0)
 
 class CRBM {
     public:
@@ -28,24 +27,24 @@ class CRBM {
         Matrix *CPU_vbias, *CPU_hbias;
         Matrix *CPU_y_h, *CPU_y_h_probs;
         Matrix *CPU_y_p;
-        Matrix *CPU_y_v_probs;
+        Matrix *CPU_y_v, *CPU_y_v_probs;
 
-        void CPU_convolution_forward();
-        void CPU_max_pooling();
-        void CPU_convolution_backward();
+        void CPU_convolution_forward(float*, float*, float*, float*);
+        void CPU_max_pooling(float*, float*, float*);
+        void CPU_convolution_backward(float*, float*, float*, float*, float*);
 
         NVMatrix *GPU_input;
         NVMatrix *GPU_filters;
         NVMatrix *GPU_vbias, *GPU_hbias;
         NVMatrix *GPU_y_h, *GPU_y_h_probs;
         NVMatrix *GPU_y_p;
-        NVMatrix *GPU_y_v_probs;
+        NVMatrix *GPU_y_v, *GPU_y_v_probs;
         curandState *rnd_state;
         int rnd_state_num;
 
-        void GPU_convolution_forward();
-        void GPU_max_pooling();
-        void GPU_convolution_backward();
+        void GPU_convolution_forward(float*, float*, float*, float*);
+        void GPU_max_pooling(float*, float*, float*);
+        void GPU_convolution_backward(float*, float*, float*, float*, float*);
 
         CRBM(int, int, int, int, int, int, int, int,
              Matrix*, Matrix*, Matrix*, Matrix*);
