@@ -238,7 +238,7 @@ void CRBM::CPU_convolution_backward(){
                                      j >= (padding + feature_map_size))){
                                     tmp_recon[r][c] += 
                                         fm[(i-padding)*feature_map_size + (j-padding)] *
-                                        filter[(filter_size-1-(i-r))*feature_map_size + (filter_size-1-(j-c))];
+                                        filter[(filter_size-1-(i-r))*filter_size + (filter_size-1-(j-c))];
                                 }
                             }
                         }
@@ -248,7 +248,8 @@ void CRBM::CPU_convolution_backward(){
              
             for(int i = 0; i < input_size; i++){
                 for(int j = 0; j < input_size; j++){
-                    target[i*input_size+j] = logisitc(tmp_recon[i+lu_padding][j+lu_padding]);
+                    //target[i*input_size+j] = logisitc(tmp_recon[i+lu_padding][j+lu_padding]);
+                    target[i*input_size+j] = tmp_recon[i+lu_padding][j+lu_padding];
                 }
             }
         }
@@ -486,10 +487,10 @@ __global__ void convolution_backward_kernel(float *y_h, float *filters, float *t
                     shFlipFilter[i][j];
             }
         }
-        target[ty*input_size+tx] = 1.0 / (1 + __expf(-target[ty*input_size+tx]));
 
         __syncthreads();
     }
+    //target[ty*input_size+tx] = 1.0 / (1.0 + __expf(-target[ty*input_size+tx]));
 }
 
 void CRBM::GPU_convolution_forward(){
@@ -498,6 +499,7 @@ void CRBM::GPU_convolution_forward(){
     convolution_forward_kernel<<<blocks, threads>>>(GPU_input->get_data(),
         GPU_filters->get_data(), GPU_y_h->get_data(), GPU_hbias->get_data(), input_size,
         channel_num, feature_map_size, filter_size, filter_num, left_upper_padding);
+    cudaDeviceSynchronize();
 }
 
 void CRBM::GPU_max_pooling(){
@@ -507,6 +509,7 @@ void CRBM::GPU_max_pooling(){
     max_pooling_kernel<<<blocks, threads>>>(GPU_y_h->get_data(), GPU_y_h_probs->get_data(),
             GPU_y_p->get_data(), feature_map_size, filter_num, pooling_rate, rnd_state, 
             rnd_state_num);
+    cudaDeviceSynchronize();
 }
 
 void CRBM::GPU_convolution_backward(){
@@ -516,4 +519,5 @@ void CRBM::GPU_convolution_backward(){
     convolution_backward_kernel<<<blocks, threads>>>(GPU_y_h_probs->get_data(),
         GPU_filters->get_data(), GPU_y_v_probs->get_data(), input_size, left_upper_padding,
         channel_num, feature_map_size, filter_num, filter_size);
+    cudaDeviceSynchronize();
 }

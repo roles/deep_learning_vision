@@ -56,6 +56,12 @@ run(PyObject *self, PyObject *args){
     
     timeFunc(crbm->GPU_convolution_backward(), "GPU convolutional backward");
 
+    /*Matrix* tmp_y_h_probs = new Matrix(crbm->CPU_y_h_probs->get_row_num(),
+                                 crbm->CPU_y_h_probs->get_col_num());
+    crbm->GPU_y_h_probs->assign(*tmp_y_h_probs);
+    crbm->CPU_y_h_probs->equal_value(*tmp_y_h_probs);
+    delete tmp_y_h_probs;*/
+
     Matrix* tmp_y_v_probs = new Matrix(crbm->CPU_y_v_probs->get_row_num(),
                                  crbm->CPU_y_v_probs->get_col_num());
     crbm->GPU_y_v_probs->assign(*tmp_y_v_probs);
