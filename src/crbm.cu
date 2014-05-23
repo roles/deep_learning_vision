@@ -58,6 +58,7 @@ CRBM::CRBM(int filter_num, int filter_size,
             filter_num * feature_map_size * feature_map_size);
     this->CPU_y_h_probs = new Matrix(input_num ,
             filter_num * feature_map_size * feature_map_size);
+            //filter_num * feature_map_size * feature_map_size, 1, 1);
     this->CPU_y_p = new Matrix(input_num, 
             filter_num * subsample_size * subsample_size);
     this->CPU_y_v = new Matrix(this->CPU_input->get_row_num(),
@@ -72,7 +73,7 @@ CRBM::CRBM(int filter_num, int filter_size,
     this->GPU_vbias = new NVMatrix(*this->CPU_vbias);
     this->GPU_input = new NVMatrix(*this->CPU_input);
     this->GPU_y_h = new NVMatrix(*this->CPU_y_h);
-    this->GPU_y_h_probs = new NVMatrix(*this->CPU_y_h);
+    this->GPU_y_h_probs = new NVMatrix(*this->CPU_y_h_probs);
     this->GPU_y_p = new NVMatrix(*this->CPU_y_p);
     this->GPU_y_v = new NVMatrix(*this->CPU_y_v);
     this->GPU_y_v_probs = new NVMatrix(*this->CPU_y_v_probs);
@@ -109,7 +110,6 @@ Matrix* CRBM::filter_init(int filter_size, int filter_num, int channel_num){
     float low   = - 4 * sqrt(6.0 / (2 * filter_size * filter_size * channel_num)); 
     float upper = -low;
     return new Matrix(filter_num, channel_num*filter_size*filter_size, low, upper);
-    //return new Matrix(filter_num, channel_num*filter_size*filter_size, 1.5, 1.5);
 }
 
 void CRBM::CPU_convolution_forward(float *input, float *filter, float *target, float *hbias){
@@ -271,7 +271,7 @@ void CRBM::CPU_convolution_backward(float *y_h, float *filters, float *vbias,
             for(int i = 0; i < input_size; i++){
                 for(int j = 0; j < input_size; j++){
                     target[i*input_size+j] = logisitc(tmp_recon[i+lu_padding][j+lu_padding]);
-                    //target[i*input_size+j] = tmp_recon[i+lu_padding][j+lu_padding];
+                    //target[i*input_size+j] = expf(-tmp_recon[i+lu_padding][j+lu_padding]);
                 }
             }
             bzero(tmp_recon, sizeof(tmp_recon));

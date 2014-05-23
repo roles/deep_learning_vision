@@ -82,11 +82,15 @@ bool Matrix::get_trans(){
 }
 
 bool Matrix::equal_value(Matrix &target){
+    this->equal_value(target, 1e-3);
+}
+
+bool Matrix::equal_value(Matrix &target, float e){
     assert(this->nrow == target.get_row_num() &&
            this->ncol == target.get_col_num());
     for(int i = 0; i < this->nrow; i++)
         for(int j = 0; j < this->ncol; j++){
-            if(!float_equal((*this)(i, j), target(i,j))){
+            if(!float_equal((*this)(i, j), target(i,j), e)){
                 cout << "this(" << i << j << "):" << (*this)(i, j) << endl;
                 cout << "target(" << i << j << "):" << target(i, j) << endl;
                 return false;

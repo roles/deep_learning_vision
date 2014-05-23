@@ -241,7 +241,7 @@ __global__ void convolution_backward_kernel(float *y_h, float *filters, float *v
         __syncthreads();
     }
     local_target = expf(-local_target);
-    local_target = 1.0f / (1.0f + local_target);
+    local_target = __fdividef(1.0f , (1.0f + local_target));
     target[ty*input_size+tx] = local_target;
 }
 
@@ -264,7 +264,7 @@ __global__ void compute_d_w_kernel(float *v, float *h, float *dw, bool is_init,
         channelIdx * input_size * input_size;
 
     h = h + imgIdx * filter_num * feature_map_size * feature_map_size +
-        filter_size * feature_map_size * feature_map_size;
+        filterIdx * feature_map_size * feature_map_size;
 
     dw = dw + filterIdx * channel_num * filter_size * filter_size +
         channelIdx * filter_size * filter_size;
@@ -295,9 +295,9 @@ __global__ void compute_d_w_kernel(float *v, float *h, float *dw, bool is_init,
     for(int i = 0; i < 32; i++){
         for(int j = 0; j < 32; j++){
             local_dw += shV[threadIdx.y+i][threadIdx.x+j] *
-                shH[threadIdx.y+i][threadIdx.x+j];
+                shH[i][j];
         }
     }
 
-    dw[threadIdx.y*filter_size+threadIdx.x] += local_dw;
+    atomicAdd(dw + threadIdx.y*filter_size + threadIdx.x, local_dw);
 }

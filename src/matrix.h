@@ -27,6 +27,7 @@ class Matrix {
         bool get_trans();
         float* get_data();
         bool equal_value(Matrix&);
+        bool equal_value(Matrix&, float);
 };
 
 #endif

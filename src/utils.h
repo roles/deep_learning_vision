@@ -25,8 +25,7 @@ inline float random_float(float low, float upper){
     return (rand() * 1.0 / RAND_MAX) * (upper - low) + low;
 }
 
-inline bool float_equal(float a, float b){
-    float e = 1e-5;
+inline bool float_equal(float a, float b, float e){
     float diff = a - b;
     return (diff < e) && (-diff < e);
 }
