@@ -28,10 +28,12 @@ class CRBM {
         Matrix *CPU_y_h, *CPU_y_h_probs;
         Matrix *CPU_y_p;
         Matrix *CPU_y_v, *CPU_y_v_probs;
+        Matrix *CPU_d_w;
 
         void CPU_convolution_forward(float*, float*, float*, float*);
         void CPU_max_pooling(float*, float*, float*);
         void CPU_convolution_backward(float*, float*, float*, float*, float*);
+        void CPU_compute_d_w(float*, float*, float*, bool);
 
         NVMatrix *GPU_input;
         NVMatrix *GPU_filters;
@@ -39,15 +41,18 @@ class CRBM {
         NVMatrix *GPU_y_h, *GPU_y_h_probs;
         NVMatrix *GPU_y_p;
         NVMatrix *GPU_y_v, *GPU_y_v_probs;
+        NVMatrix *GPU_d_w;
         curandState *rnd_state;
         int rnd_state_num;
 
         void GPU_convolution_forward(float*, float*, float*, float*);
         void GPU_max_pooling(float*, float*, float*);
         void GPU_convolution_backward(float*, float*, float*, float*, float*);
+        void GPU_compute_d_w(float*, float*, float*, bool);
 
         CRBM(int, int, int, int, int, int, int, int,
              Matrix*, Matrix*, Matrix*, Matrix*);
+        void start();
         ~CRBM();
 
 

@@ -23,4 +23,8 @@ __global__ void convolution_backward_kernel(float *y_h, float *filters, float *v
         int input_size, int lu_padding, int channel_num, int feature_map_size, 
         int filter_num, int filter_size);
 
+__global__ void compute_d_w_kernel(float *v, float *h, float *dw, bool is_init, 
+        int input_size, int lu_padding, int channel_num, int filter_num, 
+        int filter_size, int feature_map_size);
+
 #endif
