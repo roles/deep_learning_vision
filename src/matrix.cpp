@@ -100,3 +100,34 @@ bool Matrix::equal_value(Matrix &target, float e){
     cout << "same" << endl;
     return true;
 }
+
+void Matrix::ele_scale(float scaler){
+    ele_scale(scaler, *this);
+}
+
+void Matrix::ele_scale(float scaler, Matrix& target){
+    for(int i = 0; i < this->nrow; i++)
+        for(int j = 0; j < this->ncol; j++){
+            target(i, j) = (*this)(i, j) * scaler;
+        }
+}
+
+void Matrix::mat_sum(int axis, Matrix& target){
+    if(axis == 0){
+        for(int i = 0; i < this->nrow; i++){
+            float sum = 0.0;
+            for(int j = 0; j < this->ncol; j++){
+                sum += (*this)(i, j);
+            }
+            target(i, 0) = sum;
+        }
+    }else{
+        for(int i = 0; i < this->ncol; i++){
+            float sum = 0.0;
+            for(int j = 0; j < this->nrow; j++){
+                sum += (*this)(j, i);
+            }
+            target(0, i) = sum;
+        }
+    }
+}

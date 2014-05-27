@@ -24,6 +24,13 @@ CRBM::CRBM(int filter_num, int filter_size,
         int pooling_rate, 
         Matrix *filters, Matrix *vbias,
         Matrix *hbias, Matrix *input){
+    
+    this->epsilon       = 0.01;
+    this->momentum      = 0.5;
+    this->l2reg         = 0.01;
+    this->ph_lambda     = 5;
+    this->ph            = 0.002;
+
     this->filter_num    = filter_num;  
     this->filter_size   = filter_size;
     this->input_num     = input_num;
@@ -43,7 +50,7 @@ CRBM::CRBM(int filter_num, int filter_size,
     }
 
     if(hbias == NULL){
-        this->CPU_hbias = new Matrix(filter_num, 1);
+        this->CPU_hbias = new Matrix(filter_num, 1, -0.1f, -0.1f);
     }else{
         this->CPU_hbias = hbias;
     }
@@ -58,6 +65,10 @@ CRBM::CRBM(int filter_num, int filter_size,
             filter_num * feature_map_size * feature_map_size);
     this->CPU_y_h_probs = new Matrix(input_num ,
             filter_num * feature_map_size * feature_map_size);
+    this->CPU_y_h2 = new Matrix(input_num ,
+            filter_num * feature_map_size * feature_map_size);
+    this->CPU_y_h2_probs = new Matrix(input_num ,
+            filter_num * feature_map_size * feature_map_size);
             //filter_num * feature_map_size * feature_map_size, 1, 1);
     this->CPU_y_p = new Matrix(input_num, 
             filter_num * subsample_size * subsample_size);
@@ -67,6 +78,8 @@ CRBM::CRBM(int filter_num, int filter_size,
             this->CPU_input->get_col_num());
     this->CPU_d_w = new Matrix(this->CPU_filters->get_row_num(),
             this->CPU_filters->get_col_num());
+    this->CPU_d_hbias = new Matrix(this->CPU_hbias->get_row_num(),
+            this->CPU_hbias->get_col_num());
 
     this->GPU_filters = new NVMatrix(*this->CPU_filters);
     this->GPU_hbias = new NVMatrix(*this->CPU_hbias);
@@ -74,11 +87,15 @@ CRBM::CRBM(int filter_num, int filter_size,
     this->GPU_input = new NVMatrix(*this->CPU_input);
     this->GPU_y_h = new NVMatrix(*this->CPU_y_h);
     this->GPU_y_h_probs = new NVMatrix(*this->CPU_y_h_probs);
+    this->GPU_y_h2 = new NVMatrix(*this->CPU_y_h2);
+    this->GPU_y_h2_probs = new NVMatrix(*this->CPU_y_h2_probs);
     this->GPU_y_p = new NVMatrix(*this->CPU_y_p);
     this->GPU_y_v = new NVMatrix(*this->CPU_y_v);
     this->GPU_y_v_probs = new NVMatrix(*this->CPU_y_v_probs);
     this->GPU_d_w = new NVMatrix(*this->CPU_d_w);
-    this->rnd_state_num = 1;
+    this->GPU_d_hbias = new NVMatrix(*this->CPU_d_hbias);
+
+    this->rnd_state_num = 1000;
     setup_curand(&this->rnd_state, this->rnd_state_num);
 }
 
@@ -92,6 +109,7 @@ CRBM::~CRBM(){
     delete this->CPU_y_v;
     delete this->CPU_y_v_probs;
     delete this->CPU_d_w;
+    delete this->CPU_d_hbias;
 
     delete this->GPU_filters;
     delete this->GPU_hbias;
@@ -102,6 +120,7 @@ CRBM::~CRBM(){
     delete this->GPU_y_v;
     delete this->GPU_y_v_probs;
     delete this->GPU_d_w;
+    delete this->GPU_d_hbias;
 
     cudaFree(this->rnd_state);
 }
@@ -241,6 +260,10 @@ void CRBM::CPU_convolution_backward(float *y_h, float *filters, float *vbias,
                 img * channel_num * input_size * input_size +
                 cha * input_size * input_size;
 
+            float *target_y_v = y_v +
+                img * channel_num * input_size * input_size +
+                cha * input_size * input_size;
+
             for(int fil = 0; fil < filter_num; fil++){
                 float *filter = filters +
                     fil * filter_size * filter_size * channel_num +
@@ -271,7 +294,8 @@ void CRBM::CPU_convolution_backward(float *y_h, float *filters, float *vbias,
             for(int i = 0; i < input_size; i++){
                 for(int j = 0; j < input_size; j++){
                     target[i*input_size+j] = logisitc(tmp_recon[i+lu_padding][j+lu_padding]);
-                    //target[i*input_size+j] = expf(-tmp_recon[i+lu_padding][j+lu_padding]);
+                    target_y_v[i*input_size+j] =
+                        (random_float(0,1) < target[i*input_size+j]) ? 1 : 0;
                 }
             }
             bzero(tmp_recon, sizeof(tmp_recon));
@@ -360,11 +384,15 @@ void CRBM::GPU_convolution_backward(float *y_h, float *filters, float *vbias,
 
     convolution_backward_kernel<<<blocks, threads>>>(y_h,
             filters, vbias, y_v_probs, y_v, input_size, left_upper_padding,
-            channel_num, feature_map_size, filter_num, filter_size);
+            channel_num, feature_map_size, filter_num, filter_size, rnd_state, rnd_state_num);
     cudaDeviceSynchronize();
 }
 
 void CRBM::GPU_compute_d_w(float *v, float *h, float *dw, bool is_init){
+    if(is_init){
+        cudaMemset(dw, 0, filter_num * channel_num * filter_size * filter_size * 
+                sizeof(float));
+    }
     dim3 blocks = dim3(channel_num * filter_num * feature_map_size / 32, 
             input_num * feature_map_size / 32);
     dim3 threads = dim3(filter_size, filter_size);
@@ -376,6 +404,9 @@ void CRBM::GPU_compute_d_w(float *v, float *h, float *dw, bool is_init){
 
 void CRBM::start(){
     struct timeval _start_time, _end_time;
+
+    /* CPU computation */
+    /**********************************/
 
     timeFunc(this->CPU_convolution_forward(this->CPU_input->get_data(),
             this->CPU_filters->get_data(), this->CPU_y_h->get_data(),
@@ -390,9 +421,29 @@ void CRBM::start(){
             this->CPU_y_v_probs->get_data(), this->CPU_y_v->get_data()), 
             "CPU convolutional backward");
 
+    timeFunc(this->CPU_convolution_forward(this->CPU_y_v_probs->get_data(),
+            this->CPU_filters->get_data(), this->CPU_y_h2->get_data(),
+            this->CPU_hbias->get_data()), "CPU convolutional forward");
+    
+    timeFunc(this->CPU_max_pooling(this->CPU_y_h2->get_data(),
+            this->CPU_y_h2_probs->get_data(), this->CPU_y_p->get_data()), 
+            "CPU max pooling");
+
     timeFunc(this->CPU_compute_d_w(this->CPU_input->get_data(),
             this->CPU_y_h_probs->get_data(), this->CPU_d_w->get_data(),
             true), "CPU compute dw positive phase");
+
+    timeFunc(this->CPU_compute_d_w(this->CPU_y_v_probs->get_data(),
+            this->CPU_y_h2_probs->get_data(), this->CPU_d_w->get_data(),
+            false), "CPU compute dw negative phase");
+
+    this->CPU_d_w->ele_scale(1.0 / (feature_map_size * feature_map_size));
+
+    this->CPU_y_h_probs->mat_sum(0, *this->CPU_d_hbias);
+
+
+    /* GPU computation */
+    /**********************************/
 
     timeFunc(this->GPU_convolution_forward(this->GPU_input->get_data(),
             this->GPU_filters->get_data(), this->GPU_y_h->get_data(),
@@ -407,25 +458,58 @@ void CRBM::start(){
             this->GPU_y_v_probs->get_data(), this->GPU_y_v->get_data()), 
             "GPU convolutional backward");
 
+    timeFunc(this->GPU_convolution_forward(this->GPU_y_v_probs->get_data(),
+            this->GPU_filters->get_data(), this->GPU_y_h2->get_data(),
+            this->GPU_hbias->get_data()), "GPU convolutional forward");
+    
+    timeFunc(this->GPU_max_pooling(this->GPU_y_h2->get_data(),
+            this->GPU_y_h2_probs->get_data(), this->GPU_y_p->get_data()), 
+            "GPU max pooling");
+
     timeFunc(this->GPU_compute_d_w(this->GPU_input->get_data(),
             this->GPU_y_h_probs->get_data(), this->GPU_d_w->get_data(),
             true), "GPU compute dw positive phase");
 
+    timeFunc(this->GPU_compute_d_w(this->GPU_y_v_probs->get_data(),
+            this->GPU_y_h2_probs->get_data(), this->GPU_d_w->get_data(),
+            false), "GPU compute dw negative phase");
+
+    this->GPU_d_w->ele_scale(1.0 / (feature_map_size * feature_map_size));
+
+    this->GPU_y_h_probs->mat_sum(0, *this->GPU_d_hbias);
+
+    cout << "y_h : ";
     Matrix* tmp_y_h_probs = new Matrix(this->CPU_y_h_probs->get_row_num(),
                                  this->CPU_y_h_probs->get_col_num());
     this->GPU_y_h_probs->assign(*tmp_y_h_probs);
     this->CPU_y_h_probs->equal_value(*tmp_y_h_probs);
     delete tmp_y_h_probs;
 
+    cout << "y_v : ";
     Matrix* tmp_y_v_probs = new Matrix(this->CPU_y_v_probs->get_row_num(),
                                  this->CPU_y_v_probs->get_col_num());
     this->GPU_y_v_probs->assign(*tmp_y_v_probs);
     this->CPU_y_v_probs->equal_value(*tmp_y_v_probs);
     delete tmp_y_v_probs;
 
+    cout << "y_h2 : ";
+    Matrix* tmp_y_h2_probs = new Matrix(this->CPU_y_h2_probs->get_row_num(),
+                                 this->CPU_y_h2_probs->get_col_num());
+    this->GPU_y_h2_probs->assign(*tmp_y_h2_probs);
+    this->CPU_y_h2_probs->equal_value(*tmp_y_h2_probs);
+    delete tmp_y_h2_probs;
+
+    cout << "d_w : ";
     Matrix* tmp_d_w = new Matrix(this->CPU_d_w->get_row_num(),
                                  this->CPU_d_w->get_col_num());
     this->GPU_d_w->assign(*tmp_d_w);
-    this->CPU_d_w->equal_value(*tmp_d_w);
+    this->CPU_d_w->equal_value(*tmp_d_w, 1);
     delete tmp_d_w;
+
+    cout << "d_hbias : ";
+    Matrix* tmp_d_hbias = new Matrix(this->CPU_d_hbias->get_row_num(),
+                                 this->CPU_d_hbias->get_col_num());
+    this->GPU_d_hbias->assign(*tmp_d_hbias);
+    this->CPU_d_hbias->equal_value(*tmp_d_hbias, 1);
+    delete tmp_d_hbias;
 }

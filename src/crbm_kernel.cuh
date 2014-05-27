@@ -18,10 +18,10 @@ __global__ void max_pooling_kernel(float *feature_map, float *probs, float *targ
         int feature_map_size, int feature_map_num, int pooling_rate,
         curandState *rnd_state, int rnd_state_num);
 
-__global__ void convolution_backward_kernel(float *y_h, float *filters, float *vibas,
+__global__ void convolution_backward_kernel(float *y_h, float *filters, float *vbias,
         float *target, float *y_v,
         int input_size, int lu_padding, int channel_num, int feature_map_size, 
-        int filter_num, int filter_size);
+        int filter_num, int filter_size, curandState *rnd_state, int rnd_state_num);
 
 __global__ void compute_d_w_kernel(float *v, float *h, float *dw, bool is_init, 
         int input_size, int lu_padding, int channel_num, int filter_num, 

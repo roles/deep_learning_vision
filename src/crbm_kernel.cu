@@ -101,7 +101,8 @@ __global__ void max_pooling_kernel(float *feature_map, float *probs, float *targ
     int ty = (blockIdx.y % (feature_map_size / pooling_rate / 16)) * 16 + threadIdx.y;
     int subsample_size = feature_map_size / pooling_rate;
 
-    float rnd = curand_uniform(rnd_state);
+    int rnd_index = (threadIdx.y * blockDim.x + threadIdx.x) % rnd_state_num;
+    float rnd = curand_uniform(&rnd_state[rnd_index]);
 
     float *fm = feature_map + imgIdx * feature_map_num * feature_map_size * feature_map_size +
         fmIdx * feature_map_size * feature_map_size;
@@ -156,21 +157,27 @@ __global__ void max_pooling_kernel(float *feature_map, float *probs, float *targ
     }
 }
 
-__global__ void convolution_backward_kernel(float *y_h, float *filters, float *vibas,
+__global__ void convolution_backward_kernel(float *y_h, float *filters, float *vbias,
         float *target, float *y_v,
         int input_size, int lu_padding, int channel_num, int feature_map_size, 
-        int filter_num, int filter_size){
+        int filter_num, int filter_size, curandState *rnd_state, int rnd_state_num){
     int imgIdx = blockIdx.y / (input_size / 32); 
     int channelIdx = blockIdx.x / (input_size / 32);
     int tx = (blockIdx.x % (input_size / 32)) * 32 + threadIdx.x;
     int ty = (blockIdx.y % (input_size / 32)) * 32 + threadIdx.y;
     int padding = (filter_size - 1);
 
+    int rnd_index = (threadIdx.y * blockDim.x + threadIdx.x) % rnd_state_num;
+    float rnd = curand_uniform(&rnd_state[rnd_index]);
+
     __shared__ float shHidden[32+2*(MAX_FILETER_SIZE-1)][32+2*(MAX_FILETER_SIZE-1)];
     __shared__ float shFlipFilter[MAX_FILETER_SIZE][MAX_FILETER_SIZE];
     float local_target = 0.0f;
 
     target = target + imgIdx * channel_num * input_size * input_size +
+        channelIdx * input_size * input_size;
+
+    float *target_y_v = y_v + imgIdx * channel_num * input_size * input_size +
         channelIdx * input_size * input_size;
 
     __syncthreads();
@@ -240,8 +247,14 @@ __global__ void convolution_backward_kernel(float *y_h, float *filters, float *v
 
         __syncthreads();
     }
+    local_target += vbias[channelIdx];
     local_target = expf(-local_target);
     local_target = __fdividef(1.0f , (1.0f + local_target));
+    if(rnd < local_target){
+        target_y_v[ty*input_size+tx] = 1;
+    }else{
+        target_y_v[ty*input_size+tx] = 0;
+    }
     target[ty*input_size+tx] = local_target;
 }
 
@@ -259,6 +272,13 @@ __global__ void compute_d_w_kernel(float *v, float *h, float *dw, bool is_init,
 
     __shared__ float shV[32+MAX_FILETER_SIZE][32+MAX_FILETER_SIZE];
     __shared__ float shH[32][32];
+
+    float sign;
+    if(is_init){
+        sign = 1.0f;
+    }else{
+        sign = -1.0f;
+    }
 
     v = v + imgIdx * channel_num * input_size * input_size +
         channelIdx * input_size * input_size;
@@ -299,5 +319,5 @@ __global__ void compute_d_w_kernel(float *v, float *h, float *dw, bool is_init,
         }
     }
 
-    atomicAdd(dw + threadIdx.y*filter_size + threadIdx.x, local_dw);
+    atomicAdd(dw + threadIdx.y*filter_size + threadIdx.x, sign * local_dw);
 }

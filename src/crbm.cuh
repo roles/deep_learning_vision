@@ -12,6 +12,12 @@
 
 class CRBM {
     public:
+        float epsilon;
+        float momentum;
+        float l2reg;        //regularization penaltiy coefficient
+        float ph_lambda;    //sparsity penaltiy coefficient
+        float ph;           //hidden layer sparsity percentage
+
         int filter_num;
         int filter_size;
         int input_num;
@@ -26,9 +32,10 @@ class CRBM {
         Matrix *CPU_filters;
         Matrix *CPU_vbias, *CPU_hbias;
         Matrix *CPU_y_h, *CPU_y_h_probs;
+        Matrix *CPU_y_h2, *CPU_y_h2_probs;
         Matrix *CPU_y_p;
         Matrix *CPU_y_v, *CPU_y_v_probs;
-        Matrix *CPU_d_w;
+        Matrix *CPU_d_w, *CPU_d_hbias;
 
         void CPU_convolution_forward(float*, float*, float*, float*);
         void CPU_max_pooling(float*, float*, float*);
@@ -39,9 +46,10 @@ class CRBM {
         NVMatrix *GPU_filters;
         NVMatrix *GPU_vbias, *GPU_hbias;
         NVMatrix *GPU_y_h, *GPU_y_h_probs;
+        NVMatrix *GPU_y_h2, *GPU_y_h2_probs;
         NVMatrix *GPU_y_p;
         NVMatrix *GPU_y_v, *GPU_y_v_probs;
-        NVMatrix *GPU_d_w;
+        NVMatrix *GPU_d_w, *GPU_d_hbias;
         curandState *rnd_state;
         int rnd_state_num;
 

@@ -28,6 +28,10 @@ class Matrix {
         float* get_data();
         bool equal_value(Matrix&);
         bool equal_value(Matrix&, float);
+
+        void ele_scale(float);
+        void ele_scale(float, Matrix&);
+        void mat_sum(int axis, Matrix&);
 };
 
 #endif
