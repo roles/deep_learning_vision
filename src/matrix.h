@@ -24,14 +24,25 @@ class Matrix {
         }
         int get_row_num();
         int get_col_num();
+        int get_ele_num();
+        void reshape(int, int);
         bool get_trans();
         float* get_data();
         bool equal_value(Matrix&);
         bool equal_value(Matrix&, float);
 
+        void assign(Matrix& target);
+        void mat_init(float val);
+        void mat_add(Matrix& m, float sb);
+        void mat_add(Matrix& m, Matrix& target, float sa, float sb);
         void ele_scale(float);
         void ele_scale(float, Matrix&);
+        void ele_add(float);
+        void ele_add(float, Matrix&);
         void mat_sum(int axis, Matrix&);
+        float ele_mean();
+        void mat_mul(Matrix& m, Matrix& target);
+        void mat_mul(Matrix& m);
 };
 
 #endif

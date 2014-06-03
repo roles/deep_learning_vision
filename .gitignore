@@ -4,4 +4,5 @@
 *.tif
 *.pkl
 *.swp
+*.pyc
 tags

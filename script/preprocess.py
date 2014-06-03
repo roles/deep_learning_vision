@@ -33,6 +33,22 @@ def preprocess_caltech101_image():
         img = crop_image(img, 150)
         img.save("../data/caltech101/faces/%d.png" % idx)
 
+def divide_kyoto_image(img_num, div_num):
+    img = []
+    image_path = "../data/kyoto"
+    for idx in xrange(img_num):
+        img.append(Image.open("%s/%d.tif" % (image_path, idx)))
+
+    width = img[0].size[0]
+    height = img[0].size[1]
+
+    for div_idx in xrange(div_num):
+        rnd_img_idx = np.random.randint(0, img_num) 
+        x = np.random.randint(0, width - 64)
+        y = np.random.randint(0, height - 64)
+        div_img = img[rnd_img_idx].crop((x, y, x+64, y+64))
+        div_img.save("%s/divide/%d.png" % (image_path, div_idx))
+
 def raw_image_2_pkl(image_path, image_suffix, image_count, data_path):
     data = []
     for idx in xrange(image_count):
@@ -43,7 +59,9 @@ def raw_image_2_pkl(image_path, image_suffix, image_count, data_path):
     cPickle.dump(data, open(data_path, "w+"))
 
 if __name__ == "__main__":
+    divide_kyoto_image(10, 500)
     #preprocess_kyoto_image()
     #preprocess_caltech101_image()
-    raw_image_2_pkl("../data/caltech101/faces", "png", 100, "../data/faces_train.pkl")
-    raw_image_2_pkl("../data/kyoto", "tif", 10, "../data/kyoto_train.pkl")
+    #raw_image_2_pkl("../data/caltech101/faces", "png", 100, "../data/faces_train.pkl")
+    #raw_image_2_pkl("../data/kyoto", "tif", 10, "../data/kyoto_train.pkl")
+    raw_image_2_pkl("../data/kyoto/divide", "png", 500, "../data/kyoto_train.pkl")

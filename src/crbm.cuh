@@ -36,6 +36,9 @@ class CRBM {
         Matrix *CPU_y_p;
         Matrix *CPU_y_v, *CPU_y_v_probs;
         Matrix *CPU_d_w, *CPU_d_hbias;
+        Matrix *CPU_d_w_pre, *CPU_d_hbias_pre;
+        Matrix *CPU_d_hbias_tmp;
+        Matrix *CPU_d_h_sum_tmp;
 
         void CPU_convolution_forward(float*, float*, float*, float*);
         void CPU_max_pooling(float*, float*, float*);
@@ -50,6 +53,9 @@ class CRBM {
         NVMatrix *GPU_y_p;
         NVMatrix *GPU_y_v, *GPU_y_v_probs;
         NVMatrix *GPU_d_w, *GPU_d_hbias;
+        NVMatrix *GPU_d_w_pre, *GPU_d_hbias_pre;
+        NVMatrix *GPU_d_hbias_tmp;
+        NVMatrix *GPU_d_h_sum_tmp;
         curandState *rnd_state;
         int rnd_state_num;
 
@@ -59,10 +65,11 @@ class CRBM {
         void GPU_compute_d_w(float*, float*, float*, bool);
 
         CRBM(int, int, int, int, int, int, int, int,
-             Matrix*, Matrix*, Matrix*, Matrix*);
-        void start();
+             Matrix*, Matrix*, Matrix*);
         ~CRBM();
 
+        void start();
+        void run_batch(Matrix&);
 
     private:
         Matrix* filter_init(int, int, int);

@@ -1,4 +1,4 @@
 set breakpoint pending on
-b crbm.cu:412
+b run_batch
 run test_nvcrbm.py
 c

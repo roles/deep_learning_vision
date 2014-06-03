@@ -77,8 +77,20 @@ int Matrix::get_col_num(){
     return this->ncol;
 }
 
+int Matrix::get_ele_num(){
+    return nrow * ncol;
+}
+
 bool Matrix::get_trans(){
     return this->trans;
+}
+
+void Matrix::mat_init(float val){
+    for(int i = 0; i < nrow; i++){
+        for(int j = 0; j < ncol; j++){
+            (*this)(i, j) = val;
+        }
+    }
 }
 
 bool Matrix::equal_value(Matrix &target){
@@ -99,6 +111,17 @@ bool Matrix::equal_value(Matrix &target, float e){
 
     cout << "same" << endl;
     return true;
+}
+
+void Matrix::ele_add(float val){
+    ele_add(val, *this);
+}
+
+void Matrix::ele_add(float val, Matrix& target){
+    for(int i = 0; i < this->nrow; i++)
+        for(int j = 0; j < this->ncol; j++){
+            target(i, j) = (*this)(i, j) + val;
+        }
 }
 
 void Matrix::ele_scale(float scaler){
@@ -130,4 +153,48 @@ void Matrix::mat_sum(int axis, Matrix& target){
             target(0, i) = sum;
         }
     }
+}
+
+void Matrix::mat_add(Matrix& m, float sb){
+    mat_add(m, *this, 1.0, sb);
+}
+
+void Matrix::mat_add(Matrix& m, Matrix& target, float sa, float sb){
+    for(int i = 0; i < this->nrow; i++)
+        for(int j = 0; j < this->ncol; j++){
+            target(i, j) = sa * (*this)(i, j) + sb * m(i, j);
+        }
+}
+
+void Matrix::assign(Matrix& target){
+    for(int i = 0; i < this->nrow; i++)
+        for(int j = 0; j < this->ncol; j++){
+            target(i, j) = (*this)(i, j);
+        }
+}
+
+float Matrix::ele_mean(){
+    float mean = 0.0f;
+    for(int i = 0; i < this->nrow; i++)
+        for(int j = 0; j < this->ncol; j++){
+            mean += (*this)(i, j);
+        }
+    mean /= get_ele_num();
+    return mean;
+}
+
+void Matrix::mat_mul(Matrix& m, Matrix& target){
+    for(int i = 0; i < this->nrow; i++)
+        for(int j = 0; j < this->ncol; j++){
+            target(i, j) = (*this)(i, j) * m(i, j);
+        }
+}
+
+void Matrix::mat_mul(Matrix& m){
+    mat_mul(m, *this);
+}
+
+void Matrix::reshape(int nrow, int ncol){
+    this->nrow = nrow;
+    this->ncol = ncol;
 }

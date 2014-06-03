@@ -150,7 +150,7 @@ __global__ void max_pooling_kernel(float *feature_map, float *probs, float *targ
             }
         }
     }
-    if(!isStop){
+    if(isStop){
         target[threadIdx.y*subsample_size+threadIdx.x] = 1;
     }else{
         target[threadIdx.y*subsample_size+threadIdx.x] = 0;
