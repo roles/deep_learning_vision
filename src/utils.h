@@ -6,6 +6,7 @@
 #include <iostream>
 #include <cmath>
 
+#ifdef TIME_FUNC
 #define timeFunc(func, message) \
     gettimeofday(&_start_time, NULL); \
     (func);                          \
@@ -20,6 +21,9 @@
                      (_end_time.tv_usec - _start_time.tv_usec) / 1000000.0  \
                   << "s" << std::endl; \
     }
+#else
+#define timeFunc(func, message) (func);                          
+#endif
 
 inline float random_float(float low, float upper){
     return (rand() * 1.0 / RAND_MAX) * (upper - low) + low;

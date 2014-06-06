@@ -4,6 +4,7 @@
 #include "matrix.h"
 #include "nvmatrix.cuh"
 #include <curand_kernel.h>
+#include <curand.h>
 #include <cuda.h>
 
 #define CUDA_CALL(x) do { if((x) != cudaSuccess) { \
@@ -17,6 +18,12 @@ class CRBM {
         float l2reg;        //regularization penaltiy coefficient
         float ph_lambda;    //sparsity penaltiy coefficient
         float ph;           //hidden layer sparsity percentage
+        float sigma;
+        int cur_trial;
+        int cur_batch;
+        int cur_image;
+        float ferr;
+        float sparsity;
 
         int filter_num;
         int filter_size;
@@ -56,8 +63,10 @@ class CRBM {
         NVMatrix *GPU_d_w_pre, *GPU_d_hbias_pre;
         NVMatrix *GPU_d_hbias_tmp;
         NVMatrix *GPU_d_h_sum_tmp;
-        curandState *rnd_state;
-        int rnd_state_num;
+
+        curandGenerator_t rnd_gen;
+        int rnd_num;
+        float *rnd_array;
 
         void GPU_convolution_forward(float*, float*, float*, float*);
         void GPU_max_pooling(float*, float*, float*);
@@ -69,7 +78,7 @@ class CRBM {
         ~CRBM();
 
         void start();
-        void run_batch(Matrix&);
+        void run_batch(int, int, int, Matrix&);
 
     private:
         Matrix* filter_init(int, int, int);

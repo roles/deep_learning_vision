@@ -68,20 +68,22 @@ init(PyObject *self, PyObject *args){
 static PyObject*
 run_batch(PyObject *self, PyObject *args){
     PyArrayObject *pybatch_data;
+    int cur_trail, cur_image, cur_batch;
 
-    if(!PyArg_ParseTuple(args, "O!", 
+    if(!PyArg_ParseTuple(args, "iiiO!", 
+        &cur_trail, &cur_image, &cur_batch,
         &PyArray_Type, &pybatch_data)){
         return NULL;
     }
     Matrix batch_data(pybatch_data);
 
-    crbm->run_batch(batch_data);
+    crbm->run_batch(cur_trail, cur_image, cur_batch, batch_data);
     
     return Py_BuildValue("i", 0);
 }
 
 static PyObject*
-get_filters(PyObject *self, PyObject *args){
+get_gpu_filters(PyObject *self, PyObject *args){
     PyArrayObject *pyfilter;
 
     Matrix *tmp_filter = new Matrix(*crbm->CPU_filters);
@@ -92,8 +94,41 @@ get_filters(PyObject *self, PyObject *args){
     return PyArray_Return(pyfilter);
 }
 
+static PyObject*
+get_cpu_filters(PyObject *self, PyObject *args){
+    PyArrayObject *pyfilter;
+
+    pyfilter = copy_host_matrix(*crbm->CPU_filters);
+
+    return PyArray_Return(pyfilter);
+}
+
+static PyObject*
+get_gpu_hbias(PyObject *self, PyObject *args){
+    PyArrayObject *pyhbias;
+
+    Matrix *tmp_hbias = new Matrix(*crbm->CPU_hbias);
+    crbm->GPU_hbias->assign(*tmp_hbias);
+    pyhbias = copy_host_matrix(*tmp_hbias);
+    delete tmp_hbias;
+
+    return PyArray_Return(pyhbias);
+}
+
+static PyObject*
+print_result(PyObject *self, PyObject *args){
+    cout << "ferr : " << crbm->ferr / 20.0 << endl;
+    cout << "sparsity : " << crbm->sparsity / 20.0 << endl;
+    crbm->ferr = 0.0;
+    crbm->sparsity = 0.0;
+    return Py_BuildValue("i", 0);
+}
+
 static PyMethodDef PyNVcrbmMethods[] = {
-    {"get_filters", get_filters, METH_VARARGS, "Get the filter weight matrix"},
+    {"get_gpu_filters", get_gpu_filters, METH_VARARGS, "Get the filter weight matrix"},
+    {"get_cpu_filters", get_cpu_filters, METH_VARARGS, "Get the filter weight matrix"},
+    {"get_gpu_hbias", get_gpu_hbias, METH_VARARGS, "Get gpu hidden layer bias"},
+    {"print_result", print_result, METH_VARARGS, "print result"},
     {"run_batch", run_batch, METH_VARARGS, "Run a batch"},
     {"init", init, METH_VARARGS, "Initialize the convolutional RBM"},
     {NULL, NULL, 0, NULL}

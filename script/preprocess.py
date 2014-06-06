@@ -50,18 +50,62 @@ def divide_kyoto_image(img_num, div_num):
         div_img.save("%s/divide/%d.png" % (image_path, div_idx))
 
 def raw_image_2_pkl(image_path, image_suffix, image_count, data_path):
+    """
+import numpy as np
+import Image
+from glob import glob
+import os
+import math
+import cPickle
+image_path = "../data/kyoto"
+image_suffix = "tif"
+idx = 1
+img = Image.open("%s/%d.%s" % (image_path, idx, image_suffix))
+img_data = np.asarray(img.getdata()).reshape(img.size)
+img_data = img_data - img_data.mean()
+img_data = img_data / img_data.std()
+width = img_data.shape[0]
+height = img_data.shape[1]
+fx, fy = np.meshgrid(np.linspace(-width/2, width/2-1, width), np.linspace(-height/2, height/2-1, height))
+rho = np.sqrt(fx * fx + fy * fy)
+f0 = 0.4 * np.mean([width, height])
+filt = rho * np.exp(- np.power(rho/f0, 4))
+If = np.fft.fft2(img_data)
+img_data = np.real(np.fft.ifft2(If * np.fft.fftshift(filt)))
+img_data = img_data / img_data.std()
+img_data = img_data - img_data.mean()
+img_data = img_data / np.sqrt(np.mean(np.power(img_data, 2)))
+img_data = np.sqrt(0.1) * img_data
+    """
     data = []
-    for idx in xrange(image_count):
-        img = Image.open("%s/%d.%s" % (image_path, idx, image_suffix))
-        img_data = np.asarray(img.getdata()).reshape(img.size)
-        img_data = np.array(img_data/255.0, dtype="float32")
-        data.append(img_data)
+    for idx in xrange(image_count+1):
+        try:
+            img = Image.open("%s/%d.%s" % (image_path, idx, image_suffix))
+            img_data = np.asarray(img.getdata()).reshape(img.size)
+            img_data = img_data - img_data.mean()
+            img_data = img_data / img_data.std()
+            width = img_data.shape[0]
+            height = img_data.shape[1]
+            fx, fy = np.meshgrid(np.linspace(-width/2, width/2-1, width), np.linspace(-height/2, height/2-1, height))
+            rho = np.sqrt(fx * fx + fy * fy)
+            f0 = 0.4 * np.mean([width, height])
+            filt = rho * np.exp(- np.power(rho/f0, 4))
+            If = np.fft.fft2(img_data)
+            img_data = np.real(np.fft.ifft2(If * np.fft.fftshift(filt)))
+            img_data = img_data / img_data.std()
+            img_data = img_data - img_data.mean()
+            img_data = img_data / np.sqrt(np.mean(np.power(img_data, 2)))
+            img_data = np.sqrt(0.1) * img_data
+            data.append(img_data)
+        except:
+            pass
     cPickle.dump(data, open(data_path, "w+"))
 
 if __name__ == "__main__":
-    divide_kyoto_image(10, 500)
+    #divide_kyoto_image(10, 500)
     #preprocess_kyoto_image()
     #preprocess_caltech101_image()
     #raw_image_2_pkl("../data/caltech101/faces", "png", 100, "../data/faces_train.pkl")
-    #raw_image_2_pkl("../data/kyoto", "tif", 10, "../data/kyoto_train.pkl")
-    raw_image_2_pkl("../data/kyoto/divide", "png", 500, "../data/kyoto_train.pkl")
+    raw_image_2_pkl("../data/kyoto", "tif", 10, "../data/kyoto_large_train.pkl")
+    #raw_image_2_pkl("../data/kyoto/divide", "png", 500, "../data/kyoto_train.pkl")
+

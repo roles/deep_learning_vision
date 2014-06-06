@@ -1,8 +1,10 @@
 *.so
 *.o
 *.png
+*.dat
 *.tif
 *.pkl
 *.swp
 *.pyc
 tags
+core

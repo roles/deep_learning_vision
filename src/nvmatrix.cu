@@ -108,13 +108,13 @@ float NVMatrix::ele_mean(){
 
 void NVMatrix::mat_sum(int axis, NVMatrix& target){
     if(axis == 1){      //column sum
-        dim3 blocks = dim3(ceil(nrow / 64.0), 1);
+        dim3 blocks = dim3(ceil(ncol / 64.0), 1);
         dim3 threads = dim3(64, 1);
         _mat_sum_col<<<blocks, threads>>>(get_data(), target.get_data(), nrow, ncol);
         cudaDeviceSynchronize();
     }else{              //row sum
         /*
-        dim3 blocks = dim3(ceil(ncol / 64.0), 1);
+        dim3 blocks = dim3(ceil(nrow / 64.0), 1);
         dim3 threads = dim3(64, 1);
         _mat_sum_row<<<blocks, threads>>>(get_data(), target.get_data(), nrow, ncol);
         */
@@ -165,7 +165,7 @@ void NVMatrix::mat_mul(NVMatrix& m, NVMatrix& target){
 }
 
 void NVMatrix::assign(NVMatrix& target){
-    _copy_mat<<<ceil(nrow/64.0), 64>>>(get_data(), target.get_data(), get_ele_num());
+    _copy_mat<<<ceil(get_ele_num()/64.0), 64>>>(get_data(), target.get_data(), get_ele_num());
 }
 
 void NVMatrix::copyFromHost(Matrix& source){

@@ -2,6 +2,7 @@
 #include "utils.h"
 #include <iostream>
 #include <cstring>
+#include <cmath>
 
 using namespace std;
 
@@ -94,7 +95,7 @@ void Matrix::mat_init(float val){
 }
 
 bool Matrix::equal_value(Matrix &target){
-    this->equal_value(target, 1e-3);
+    this->equal_value(target, 1e-5);
 }
 
 bool Matrix::equal_value(Matrix &target, float e){
@@ -197,4 +198,14 @@ void Matrix::mat_mul(Matrix& m){
 void Matrix::reshape(int nrow, int ncol){
     this->nrow = nrow;
     this->ncol = ncol;
+}
+
+bool Matrix::check_nan(){
+    for(int i = 0; i < this->nrow; i++)
+        for(int j = 0; j < this->ncol; j++){
+            if(isnan((*this)(i, j))){
+                return false;
+            }
+        }
+    return true;
 }

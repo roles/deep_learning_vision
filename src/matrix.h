@@ -30,6 +30,7 @@ class Matrix {
         float* get_data();
         bool equal_value(Matrix&);
         bool equal_value(Matrix&, float);
+        bool check_nan();
 
         void assign(Matrix& target);
         void mat_init(float val);

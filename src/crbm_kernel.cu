@@ -5,7 +5,7 @@ using namespace std;
 __global__ void convolution_forward_kernel(float *input, 
         float *filters, float *feature_map, float *hbias, int input_size, 
         int channel_num, int feature_map_size, int filter_size,
-        int filter_num, int lu_padding){
+        int filter_num, int lu_padding, float sigma){
     __shared__ float shImg[32+MAX_FILETER_SIZE-1][32+MAX_FILETER_SIZE-1];
     __shared__ float shFilter[MAX_FILETER_SIZE][MAX_FILETER_SIZE];
 
@@ -86,13 +86,15 @@ __global__ void convolution_forward_kernel(float *input,
 
     }
 
-    *target += local_target + hbias[filterIdx];
+    local_target += hbias[filterIdx];
+    local_target *= __fdividef(1.0f , sigma * sigma);
+    *target = local_target;
 
 }
 
 __global__ void max_pooling_kernel(float *feature_map, float *probs, float *target,
         int feature_map_size, int feature_map_num, int pooling_rate,
-        curandState *rnd_state, int rnd_state_num){
+        float *rnd_array, int rnd_num){
     __shared__ float shFm[16*MAX_POOLING_RATE][16*MAX_POOLING_RATE];
 
     int imgIdx = blockIdx.y / (feature_map_size / 16 / pooling_rate);
@@ -101,8 +103,8 @@ __global__ void max_pooling_kernel(float *feature_map, float *probs, float *targ
     int ty = (blockIdx.y % (feature_map_size / pooling_rate / 16)) * 16 + threadIdx.y;
     int subsample_size = feature_map_size / pooling_rate;
 
-    int rnd_index = (threadIdx.y * blockDim.x + threadIdx.x) % rnd_state_num;
-    float rnd = curand_uniform(&rnd_state[rnd_index]);
+    int rnd_index = ((blockIdx.y * blockDim.y + threadIdx.y) * (blockIdx.x * blockDim.x)  + threadIdx.x ) % rnd_num;
+    float rnd = rnd_array[rnd_index];
 
     float *fm = feature_map + imgIdx * feature_map_num * feature_map_size * feature_map_size +
         fmIdx * feature_map_size * feature_map_size;
@@ -125,6 +127,9 @@ __global__ void max_pooling_kernel(float *feature_map, float *probs, float *targ
     float sum = 0;
     for(int i = 0; i < pooling_rate; i++){
         for(int j = 0; j < pooling_rate; j++){
+            if(shFm[threadIdx.y*pooling_rate+i][threadIdx.x*pooling_rate+j] > 50){
+                shFm[threadIdx.y*pooling_rate+i][threadIdx.x*pooling_rate+j] = 50.0f;
+            }
             shFm[threadIdx.y*pooling_rate+i][threadIdx.x*pooling_rate+j] =
                 __expf(shFm[threadIdx.y*pooling_rate+i][threadIdx.x*pooling_rate+j]);
             sum += shFm[threadIdx.y*pooling_rate+i][threadIdx.x*pooling_rate+j];
@@ -132,7 +137,8 @@ __global__ void max_pooling_kernel(float *feature_map, float *probs, float *targ
     }
     for(int i = 0; i < pooling_rate; i++){
         for(int j = 0; j < pooling_rate; j++){
-            shFm[threadIdx.y*pooling_rate+i][threadIdx.x*pooling_rate+j] /= (1 + sum);
+            shFm[threadIdx.y*pooling_rate+i][threadIdx.x*pooling_rate+j] = 
+                __fdividef(shFm[threadIdx.y*pooling_rate+i][threadIdx.x*pooling_rate+j], (1.0f + sum));
             probs[(ty*pooling_rate+i) * feature_map_size + (tx*pooling_rate+j)] = 
                 shFm[threadIdx.y*pooling_rate+i][threadIdx.x*pooling_rate+j];
             fm[(ty*pooling_rate+i) * feature_map_size + (tx*pooling_rate+j)] = 0;
@@ -160,17 +166,17 @@ __global__ void max_pooling_kernel(float *feature_map, float *probs, float *targ
 __global__ void convolution_backward_kernel(float *y_h, float *filters, float *vbias,
         float *target, float *y_v,
         int input_size, int lu_padding, int channel_num, int feature_map_size, 
-        int filter_num, int filter_size, curandState *rnd_state, int rnd_state_num){
-    int imgIdx = blockIdx.y / (input_size / 32); 
-    int channelIdx = blockIdx.x / (input_size / 32);
-    int tx = (blockIdx.x % (input_size / 32)) * 32 + threadIdx.x;
-    int ty = (blockIdx.y % (input_size / 32)) * 32 + threadIdx.y;
+        int filter_num, int filter_size, float *rnd_array, int rnd_num){
+    int imgIdx = blockIdx.y / (input_size / 16); 
+    int channelIdx = blockIdx.x / (input_size / 16);
+    int tx = (blockIdx.x % (input_size / 16)) * 16 + threadIdx.x;
+    int ty = (blockIdx.y % (input_size / 16)) * 16 + threadIdx.y;
     int padding = (filter_size - 1);
 
-    int rnd_index = (threadIdx.y * blockDim.x + threadIdx.x) % rnd_state_num;
-    float rnd = curand_uniform(&rnd_state[rnd_index]);
+    int rnd_index = ((blockIdx.y * blockDim.y + threadIdx.y) * (blockIdx.x * blockDim.x)  + threadIdx.x ) % rnd_num;
+    float rnd = rnd_array[rnd_index];
 
-    __shared__ float shHidden[32+2*(MAX_FILETER_SIZE-1)][32+2*(MAX_FILETER_SIZE-1)];
+    __shared__ float shHidden[16+2*(MAX_FILETER_SIZE-1)][16+2*(MAX_FILETER_SIZE-1)];
     __shared__ float shFlipFilter[MAX_FILETER_SIZE][MAX_FILETER_SIZE];
     float local_target = 0.0f;
 
@@ -204,32 +210,32 @@ __global__ void convolution_backward_kernel(float *y_h, float *filters, float *v
         }
 
         if(threadIdx.x < 2 * padding){
-            shHiddenLoad = &shHidden[threadIdx.y][threadIdx.x+32];
-            if(ty < padding || (tx+32) >= (feature_map_size+padding)){
+            shHiddenLoad = &shHidden[threadIdx.y][threadIdx.x+16];
+            if(ty < padding || (tx+16) >= (feature_map_size+padding)){
                 *shHiddenLoad = 0; 
             }else{
                 *shHiddenLoad = cur_y_h[(ty-padding) * feature_map_size + 
-                    (tx+32-padding)];
+                    (tx+16-padding)];
             }
         }
 
         if(threadIdx.y < 2 * padding){
-            shHiddenLoad = &shHidden[threadIdx.y+32][threadIdx.x];
-            if(tx < padding || (ty+32) >= (feature_map_size+padding)){
+            shHiddenLoad = &shHidden[threadIdx.y+16][threadIdx.x];
+            if(tx < padding || (ty+16) >= (feature_map_size+padding)){
                 *shHiddenLoad = 0; 
             }else{
-                *shHiddenLoad = cur_y_h[(ty+32-padding) * feature_map_size + 
+                *shHiddenLoad = cur_y_h[(ty+16-padding) * feature_map_size + 
                     (tx-padding)];
             }
 
             if(threadIdx.x < 2 * padding){
-                shHiddenLoad = &shHidden[threadIdx.y+32][threadIdx.x+32];
-                if((ty+32) >= (feature_map_size+padding) || 
-                   (tx+32) >= (feature_map_size+padding)){
+                shHiddenLoad = &shHidden[threadIdx.y+16][threadIdx.x+16];
+                if((ty+16) >= (feature_map_size+padding) || 
+                   (tx+16) >= (feature_map_size+padding)){
                     *shHiddenLoad = 0; 
                 }else{
-                    *shHiddenLoad = cur_y_h[(ty+32-padding) * feature_map_size + 
-                        (tx+32-padding)];
+                    *shHiddenLoad = cur_y_h[(ty+16-padding) * feature_map_size + 
+                        (tx+16-padding)];
                 }
             }
         }
@@ -248,8 +254,8 @@ __global__ void convolution_backward_kernel(float *y_h, float *filters, float *v
         __syncthreads();
     }
     local_target += vbias[channelIdx];
-    local_target = expf(-local_target);
-    local_target = __fdividef(1.0f , (1.0f + local_target));
+    //local_target = expf(-local_target);
+    //local_target = __fdividef(1.0f , (1.0f + local_target));
     if(rnd < local_target){
         target_y_v[ty*input_size+tx] = 1;
     }else{

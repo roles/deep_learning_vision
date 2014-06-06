@@ -1,4 +1,4 @@
 set breakpoint pending on
-b run_batch
+b CRBM::start
 run test_nvcrbm.py
 c
